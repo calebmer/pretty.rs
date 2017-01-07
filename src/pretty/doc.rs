@@ -4,7 +4,7 @@ use std::fmt;
 use std::io;
 use std::ops::Deref;
 
-pub use self::Doc::{Nil, Append, Space, Group, Nest, Newline, Text};
+pub use self::Doc::{Nil, Append, Space, Group, Nest, Block, Newline, Text};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Mode {
@@ -23,6 +23,7 @@ pub enum Doc<'a, B> {
     Append(B, B),
     Group(B),
     Nest(usize, B),
+    Block(usize, B),
     Space,
     Newline,
     Text(Cow<'a, str>),
@@ -205,7 +206,8 @@ where
                     &Group(ref doc) => {
                         fcmds.push((ind, mode, doc));
                     }
-                    &Nest(off, ref doc) => {
+                    &Nest(off, ref doc) |
+                    &Block(off, ref doc) => {
                         fcmds.push((ind + off, mode, doc));
                     }
                     &Space => {
@@ -238,6 +240,7 @@ where
     let mut pos = 0usize;
     let mut bcmds = vec![(0usize, Mode::Break, doc)];
     let mut fcmds = vec![];
+    let mut current_indentation = 0usize;
     while let Some((ind, mode, doc)) = bcmds.pop() {
         match doc {
             &Nil => {}
@@ -269,6 +272,15 @@ where
             &Nest(off, ref doc) => {
                 bcmds.push((ind + off, mode, doc));
             }
+            &Block(off, ref doc) => {
+                bcmds.push((if ind == current_indentation {
+                                ind + off
+                            } else {
+                                ind
+                            },
+                            mode,
+                            doc));
+            }
             &Space => {
                 match mode {
                     Mode::Flat => {
@@ -276,12 +288,14 @@ where
                     }
                     Mode::Break => {
                         try!(write_newline(ind, out));
+                        current_indentation = ind;
                     }
                 }
                 pos = ind;
             }
             &Newline => {
                 try!(write_newline(ind, out));
+                current_indentation = ind;
                 pos = ind;
             }
             &Text(ref s) => {

@@ -143,7 +143,7 @@
 
 extern crate typed_arena;
 
-use doc::Doc::{Append, Group, Nest, Newline, Nil, Space, Text};
+use doc::Doc::{Append, Block, Group, Nest, Newline, Nil, Space, Text};
 use std::borrow::Cow;
 use std::fmt;
 use std::ops::Deref;
@@ -312,6 +312,14 @@ where
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Nest(offset, allocator.alloc(this)))
     }
+
+    /// Block acts as `nest` but if multiple `blocks` are nested then only the first indentation is
+    /// done
+    #[inline]
+    pub fn block(self, offset: usize) -> DocBuilder<'a, A> {
+        let DocBuilder(allocator, this) = self;
+        DocBuilder(allocator, Block(offset, allocator.alloc(this)))
+    }
 }
 
 /// Newtype wrapper for `&doc::Doc`
@@ -457,6 +465,11 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
     pub fn nest(self, offset: usize) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).nest(offset).into()
     }
+
+    #[inline]
+    pub fn block(self, offset: usize) -> Doc<'a, BoxDoc<'a>> {
+        DocBuilder(&BOX_ALLOCATOR, self).block(offset).into()
+    }
 }
 
 
@@ -511,5 +524,21 @@ mod tests {
                 .append(Doc::text("}")),
         );
         test!(5, doc, "{\n  test\n  test\n}");
+    }
+
+    #[test]
+    fn no_double_indent_on_same_line() {
+        let lambda =
+            |body, sp: Doc<'static, _>| Doc::text("\\ ->").append(sp.append(body).block(1).group());
+        let doc = lambda(lambda(Doc::text("body"), Doc::newline()), Doc::space());
+        test!(10, doc, "\\ -> \\ ->\n body");
+    }
+
+    #[test]
+    fn nest_twice() {
+        let lambda =
+            |body, sp: Doc<'static, _>| Doc::text("\\ ->").append(sp.append(body).nest(1).group());
+        let doc = lambda(lambda(Doc::text("body"), Doc::space()), Doc::space());
+        test!(7, doc, "\\ ->\n \\ ->\n  body");
     }
 }

@@ -143,7 +143,7 @@
 
 extern crate typed_arena;
 
-use doc::Doc::{Append, Block, Group, Nest, Newline, Nil, Space, Text};
+use doc::Doc::{Append, Block, Group, Nest, Newline, Nil, Space, Text, Union};
 use std::borrow::Cow;
 use std::fmt;
 use std::ops::Deref;
@@ -320,6 +320,15 @@ where
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Block(offset, allocator.alloc(this)))
     }
+
+    #[inline]
+    pub fn union<B>(self, that: B) -> DocBuilder<'a, A>
+        where B: Into<doc::Doc<'a, A::Doc>>
+    {
+        let DocBuilder(allocator, this) = self;
+        DocBuilder(allocator,
+                   Union(allocator.alloc(this), allocator.alloc(that.into())))
+    }
 }
 
 /// Newtype wrapper for `&doc::Doc`
@@ -470,6 +479,11 @@ impl<'a> Doc<'a, BoxDoc<'a>> {
     pub fn block(self, offset: usize) -> Doc<'a, BoxDoc<'a>> {
         DocBuilder(&BOX_ALLOCATOR, self).block(offset).into()
     }
+
+    #[inline]
+    pub fn union(self, that: Doc<'a, BoxDoc<'a>>) -> Doc<'a, BoxDoc<'a>> {
+        DocBuilder(&BOX_ALLOCATOR, self).union(that).into()
+    }
 }
 
 
@@ -540,5 +554,12 @@ mod tests {
             |body, sp: Doc<'static, _>| Doc::text("\\ ->").append(sp.append(body).nest(1).group());
         let doc = lambda(lambda(Doc::text("body"), Doc::space()), Doc::space());
         test!(7, doc, "\\ ->\n \\ ->\n  body");
+    }
+
+    #[test]
+    fn union() {
+        let doc = Doc::text("1111").union(Doc::text("22"));
+        test!(4, doc, "1111");
+        test!(3, doc, "22");
     }
 }

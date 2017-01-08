@@ -4,7 +4,7 @@ use std::fmt;
 use std::io;
 use std::ops::Deref;
 
-pub use self::Doc::{Nil, Append, Space, Group, Nest, Block, Newline, Text};
+pub use self::Doc::{Nil, Append, Space, Group, Nest, Block, Newline, Text, Union};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Mode {
@@ -27,6 +27,7 @@ pub enum Doc<'a, B> {
     Space,
     Newline,
     Text(Cow<'a, str>),
+    Union(B, B),
 }
 
 impl<'a, B, S> From<S> for Doc<'a, B>
@@ -169,60 +170,80 @@ fn fitting<'a, B>(
     next: Cmd<'a, B>,
     bcmds: &Vec<Cmd<'a, B>>,
     fcmds: &mut Vec<Cmd<'a, B>>,
+    bidx: usize,
     mut rem: isize,
 ) -> bool
 where
     B: Deref<Target = Doc<'a, B>>,
 {
-    let mut bidx = bcmds.len();
-    fcmds.clear(); // clear from previous calls from best
+    let fcmds_start_len = fcmds.len();
+    let result = fitting_(next, bcmds, fcmds, bidx, rem);
+    fcmds.truncate(fcmds_start_len);
+    result
+}
+
+#[inline]
+fn fitting_<'a, B>(next: Cmd<'a, B>,
+                   bcmds: &Vec<Cmd<'a, B>>,
+                   fcmds: &mut Vec<Cmd<'a, B>>,
+                   mut bidx: usize,
+                   mut rem: isize)
+                   -> bool
+    where B: Deref<Target = Doc<'a, B>>
+{
+    let fcmds_start_len = fcmds.len();
     fcmds.push(next);
     while rem >= 0 {
-        match fcmds.pop() {
-            None => {
-                if bidx == 0 {
-                    // All commands have been processed
-                    return true;
-                } else {
-                    fcmds.push(bcmds[bidx - 1]);
-                    bidx -= 1;
-                }
+        if fcmds.len() <= fcmds_start_len {
+            if bidx == 0 {
+                // All commands have been processed
+                return true;
+            } else {
+                fcmds.push(bcmds[bidx - 1]);
+                bidx -= 1;
             }
-            Some((ind, mode, doc)) => {
-                match doc {
-                    &Nil => {}
-                    &Append(ref ldoc, ref rdoc) => {
-                        fcmds.push((ind, mode, rdoc));
-                        // Since appended documents often appear in sequence on the left side we
-                        // gain a slight performance increase by batching these pushes (avoiding
-                        // to push and directly pop `Append` documents)
-                        let mut doc = ldoc;
-                        while let Append(ref l, ref r) = **doc {
-                            fcmds.push((ind, mode, r));
-                            doc = l;
+        } else {
+            let (ind, mode, doc) = fcmds.pop().unwrap();
+            match doc {
+                &Nil => {}
+                &Append(ref ldoc, ref rdoc) => {
+                    fcmds.push((ind, mode, rdoc));
+                    // Since appended documents often appear in sequence on the left side we
+                    // gain a slight performance increase by batching these pushes (avoiding
+                    // to push and directly pop `Append` documents)
+                    let mut doc = ldoc;
+                    while let Append(ref l, ref r) = **doc {
+                        fcmds.push((ind, mode, r));
+                        doc = l;
+                    }
+                    fcmds.push((ind, mode, doc));
+                }
+                &Group(ref doc) => {
+                    fcmds.push((ind, mode, doc));
+                }
+                &Nest(off, ref doc) |
+                &Block(off, ref doc) => {
+                    fcmds.push((ind + off, mode, doc));
+                }
+                &Space => {
+                    match mode {
+                        Mode::Flat => {
+                            rem -= 1;
                         }
-                        fcmds.push((ind, mode, doc));
-                    }
-                    &Group(ref doc) => {
-                        fcmds.push((ind, mode, doc));
-                    }
-                    &Nest(off, ref doc) |
-                    &Block(off, ref doc) => {
-                        fcmds.push((ind + off, mode, doc));
-                    }
-                    &Space => {
-                        match mode {
-                            Mode::Flat => {
-                                rem -= 1;
-                            }
-                            Mode::Break => {
-                                return true;
-                            }
+                        Mode::Break => {
+                            return true;
                         }
                     }
-                    &Newline => return true,
-                    &Text(ref str) => {
-                        rem -= str.len() as isize;
+                }
+                &Newline => return true,
+                &Text(ref str) => {
+                    rem -= str.len() as isize;
+                }
+                &Union(ref x, ref y) => {
+                    if fitting((ind, Mode::Flat, x), bcmds, fcmds, bidx, rem) {
+                        return true;
+                    } else {
+                        fcmds.push((ind, mode, y));
                     }
                 }
             }
@@ -261,7 +282,8 @@ where
                     Mode::Break => {
                         let next = (ind, Mode::Flat, &**doc);
                         let rem = width as isize - pos as isize;
-                        if fitting(next, &bcmds, &mut fcmds, rem) {
+                        fcmds.clear();
+                        if fitting(next, &bcmds, &mut fcmds, bcmds.len(), rem) {
                             bcmds.push(next);
                         } else {
                             bcmds.push((ind, Mode::Break, doc));
@@ -301,6 +323,16 @@ where
             &Text(ref s) => {
                 try!(out.write_str_all(s));
                 pos += s.len();
+            }
+            &Union(ref x, ref y) => {
+                fcmds.clear();
+                let rem = width as isize - pos as isize;
+                let doc = if fitting((ind, Mode::Flat, x), &bcmds, &mut fcmds, bcmds.len(), rem) {
+                    x
+                } else {
+                    y
+                };
+                bcmds.push((ind, mode, doc));
             }
         }
     }

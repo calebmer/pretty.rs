@@ -171,7 +171,7 @@ fn fitting<'a, B>(
     bcmds: &Vec<Cmd<'a, B>>,
     fcmds: &mut Vec<Cmd<'a, B>>,
     bidx: usize,
-    mut rem: isize,
+    rem: isize,
 ) -> bool
 where
     B: Deref<Target = Doc<'a, B>>,
@@ -311,9 +311,9 @@ where
                     Mode::Break => {
                         try!(write_newline(ind, out));
                         current_indentation = ind;
+                        pos = ind;
                     }
                 }
-                pos = ind;
             }
             &Newline => {
                 try!(write_newline(ind, out));

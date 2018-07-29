@@ -173,6 +173,7 @@ pub enum Doc<'a, T, A = ()> {
     Newline,
     Text(Cow<'a, str>),
     Annotated(A, T),
+    IfBreak(T, T),
 }
 
 impl<'a, T, A> Doc<'a, T, A> {
@@ -276,6 +277,15 @@ impl<'a, A> Doc<'a, BoxDoc<'a, A>, A> {
     #[inline]
     pub fn annotate(self, ann: A) -> Doc<'a, BoxDoc<'a, A>, A> {
         DocBuilder(&BOX_ALLOCATOR, self).annotate(ann).into()
+    }
+
+    /// Chooses the other document if we are breaking.
+    #[inline]
+    pub fn if_break<D>(self, that: D) -> Doc<'a, BoxDoc<'a, A>, A>
+    where
+        D: Into<Doc<'a, BoxDoc<'a, A>, A>>,
+    {
+        DocBuilder(&BOX_ALLOCATOR, self).if_break(that).into()
     }
 }
 
@@ -543,6 +553,18 @@ where
     pub fn annotate(self, ann: A) -> DocBuilder<'a, D, A> {
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Doc::Annotated(ann, allocator.alloc(this)))
+    }
+
+    /// Chooses the other document if we are breaking.
+    #[inline]
+    pub fn if_break<E>(self, that: E) -> DocBuilder<'a, D, A>
+    where
+        E: Into<Doc<'a, D::Doc, A>>,
+    {
+        let DocBuilder(allocator, this) = self;
+        let that = that.into();
+        let doc = Doc::IfBreak(allocator.alloc(that), allocator.alloc(this));
+        DocBuilder(allocator, doc)
     }
 }
 

@@ -257,6 +257,10 @@ where
                             rem -= str.len() as isize;
                         }
                         Doc::Annotated(_, ref doc) => fcmds.push((ind, mode, doc)),
+                        Doc::IfBreak(ref yes, ref no) => match mode {
+                            Mode::Break => fcmds.push((ind, mode, yes)),
+                            Mode::Flat => fcmds.push((ind, mode, no)),
+                        },
                     }
                 }
             }
@@ -340,6 +344,10 @@ where
                 annotation_levels.push(bcmds.len());
                 bcmds.push((ind, mode, doc));
             }
+            Doc::IfBreak(ref yes, ref no) => match mode {
+                Mode::Break => bcmds.push((ind, mode, yes)),
+                Mode::Flat => bcmds.push((ind, mode, no)),
+            },
         }
 
         if annotation_levels.last() == Some(&bcmds.len()) {

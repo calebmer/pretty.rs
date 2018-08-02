@@ -241,9 +241,10 @@ where
                         Doc::Group(ref doc) => {
                             fcmds.push((ind, mode, doc));
                         }
-                        Doc::Break(ref doc) => {
-                            fcmds.push((ind, mode, doc));
-                        }
+                        Doc::Break(ref doc) => match mode {
+                            Mode::Flat => return false,
+                            Mode::Break => fcmds.push((ind, mode, doc)),
+                        },
                         Doc::Nest(off, ref doc) => {
                             fcmds.push((ind + off, mode, doc));
                         }

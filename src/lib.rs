@@ -168,10 +168,10 @@ pub enum Doc<'a, T, A = ()> {
     Nil,
     Append(T, T),
     Group(T),
+    Break(T),
     Nest(usize, T),
     Space,
     Newline,
-    Breakline,
     Text(Cow<'a, str>),
     Annotated(A, T),
     IfBreak(T, T),
@@ -196,18 +196,6 @@ impl<'a, T, A> Doc<'a, T, A> {
     #[inline]
     pub fn newline() -> Doc<'a, T, A> {
         Doc::Newline
-    }
-
-    /// A single breaking newline.
-    ///
-    /// Switches the mode for the group we find this in to “break” mode as
-    /// opposed to “flat” mode which `newline` does.
-    ///
-    /// Useful for emulating a long line that doesn’t fit in the provided
-    /// line length.
-    #[inline]
-    pub fn breakline() -> Doc<'a, T, A> {
-        Doc::Breakline
     }
 
     /// The given text, which must not contain line breaks.
@@ -461,12 +449,6 @@ pub trait DocAllocator<'a, A = ()> {
         DocBuilder(self, Doc::Newline)
     }
 
-    /// Allocate a single breakline.
-    #[inline]
-    fn breakline(&'a self) -> DocBuilder<'a, Self, A> {
-        DocBuilder(self, Doc::Breakline)
-    }
-
     /// Allocate a single space.
     #[inline]
     fn space(&'a self) -> DocBuilder<'a, Self, A> {
@@ -556,6 +538,16 @@ where
     pub fn group(self) -> DocBuilder<'a, D, A> {
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Doc::Group(allocator.alloc(this)))
+    }
+
+    /// Mark this document as a group that always breaks.
+    ///
+    /// Unlike normal groups this one will always break instead of trying to
+    /// layout sub-groups on a single line.
+    #[inline]
+    pub fn group_break(self) -> DocBuilder<'a, D, A> {
+        let DocBuilder(allocator, this) = self;
+        DocBuilder(allocator, Doc::Break(allocator.alloc(this)))
     }
 
     /// Increase the indentation level of this document.

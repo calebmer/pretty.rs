@@ -253,6 +253,7 @@ where
                             }
                         },
                         Doc::Newline => return true,
+                        Doc::Breakline => return false,
                         Doc::Text(ref str) => {
                             rem -= str.len() as isize;
                         }
@@ -312,7 +313,7 @@ where
                     pos = ind;
                 }
             },
-            Doc::Newline => {
+            Doc::Newline | Doc::Breakline => {
                 write_newline(ind, out)?;
                 pos = ind;
 

@@ -171,6 +171,7 @@ pub enum Doc<'a, T, A = ()> {
     Nest(usize, T),
     Space,
     Newline,
+    Breakline,
     Text(Cow<'a, str>),
     Annotated(A, T),
     IfBreak(T, T),
@@ -195,6 +196,18 @@ impl<'a, T, A> Doc<'a, T, A> {
     #[inline]
     pub fn newline() -> Doc<'a, T, A> {
         Doc::Newline
+    }
+
+    /// A single breaking newline.
+    ///
+    /// Switches the mode for the group we find this in to “break” mode as
+    /// opposed to “flat” mode which `newline` does.
+    ///
+    /// Useful for emulating a long line that doesn’t fit in the provided
+    /// line length.
+    #[inline]
+    pub fn breakline() -> Doc<'a, T, A> {
+        Doc::Breakline
     }
 
     /// The given text, which must not contain line breaks.
@@ -446,6 +459,12 @@ pub trait DocAllocator<'a, A = ()> {
     #[inline]
     fn newline(&'a self) -> DocBuilder<'a, Self, A> {
         DocBuilder(self, Doc::Newline)
+    }
+
+    /// Allocate a single breakline.
+    #[inline]
+    fn breakline(&'a self) -> DocBuilder<'a, Self, A> {
+        DocBuilder(self, Doc::Breakline)
     }
 
     /// Allocate a single space.

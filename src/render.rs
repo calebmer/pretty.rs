@@ -289,14 +289,17 @@ where
             }
             Doc::Group(ref doc) => match mode {
                 Mode::Flat => {
+                    println!("group in flat mode");
                     bcmds.push((ind, Mode::Flat, doc));
                 }
                 Mode::Break => {
                     let next = (ind, Mode::Flat, &**doc);
                     let rem = width as isize - pos as isize;
                     if fitting(next, &bcmds, &mut fcmds, rem) {
+                        println!("group in break mode, switching to flat mode");
                         bcmds.push(next);
                     } else {
+                        println!("group in break mode, staying in break mode");
                         bcmds.push((ind, Mode::Break, doc));
                     }
                 }
@@ -314,6 +317,8 @@ where
                 }
             },
             Doc::Newline | Doc::Breakline => {
+                println!("newline/breakline");
+
                 write_newline(ind, out)?;
                 pos = ind;
 

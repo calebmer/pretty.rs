@@ -204,6 +204,7 @@ where
         bcmds: &[Cmd<'a, T, A>],
         fcmds: &mut Vec<Cmd<'a, T, A>>,
         mut rem: isize,
+        mut group: bool,
     ) -> bool
     where
         T: Deref<Target = Doc<'a, T, A>>,
@@ -219,6 +220,7 @@ where
                         // All commands have been processed
                         return true;
                     } else {
+                        group = false;
                         fcmds.push(bcmds[bidx - 1]);
                         bidx -= 1;
                     }
@@ -253,7 +255,7 @@ where
                             }
                         },
                         Doc::Newline => return true,
-                        Doc::Breakline => return false,
+                        Doc::Breakline => return !group,
                         Doc::Text(ref str) => {
                             rem -= str.len() as isize;
                         }
@@ -294,7 +296,7 @@ where
                 Mode::Break => {
                     let next = (ind, Mode::Flat, &**doc);
                     let rem = width as isize - pos as isize;
-                    if fitting(next, &bcmds, &mut fcmds, rem) {
+                    if fitting(next, &bcmds, &mut fcmds, rem, true) {
                         bcmds.push(next);
                     } else {
                         bcmds.push((ind, Mode::Break, doc));
@@ -329,7 +331,7 @@ where
                 fcmds.extend_from_slice(&bcmds[docs..]);
                 if let Some(next) = fcmds.pop() {
                     let rem = width as isize - pos as isize;
-                    if !fitting(next, &bcmds, &mut fcmds, rem) {
+                    if !fitting(next, &bcmds, &mut fcmds, rem, false) {
                         for &mut (_, ref mut mode, _) in &mut bcmds[docs..] {
                             *mode = Mode::Break;
                         }

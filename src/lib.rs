@@ -545,7 +545,7 @@ where
     /// Unlike normal groups this one will always break instead of trying to
     /// layout sub-groups on a single line.
     #[inline]
-    pub fn group_break(self) -> DocBuilder<'a, D, A> {
+    pub fn break_group(self) -> DocBuilder<'a, D, A> {
         let DocBuilder(allocator, this) = self;
         DocBuilder(allocator, Doc::Break(allocator.alloc(this)))
     }
